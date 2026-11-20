@@ -9,6 +9,7 @@ from dreamxbotz.server.exceptions import InvalidHash
 import urllib.parse
 import logging
 import aiohttp
+import info
 
 logger = logging.getLogger(__name__)
 
@@ -45,4 +46,8 @@ async def render_page(id, secure_hash, src=None):
         file_url=src,
         file_size=file_size,
         file_unique_id=file_data.unique_id,
+        bot_name="DreamXBotz",
+        bot_url=f"https://t.me/{str(getattr(dreamxbotz, 'username', '') or 'dreamxbotz').lstrip('@')}",
+        support_url=info.GRP_LNK,
+        updates_url=info.UPDATE_CHNL_LNK,
     )
