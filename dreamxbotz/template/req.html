@@ -1120,6 +1120,88 @@
             }
         }
 
+    
+        /* Final DreamXBotz wordmark and unified violet palette */
+        .logo {
+            display: inline-flex;
+            align-items: baseline;
+            gap: .02em;
+            font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+            font-size: clamp(1.35rem, 2.5vw, 1.8rem);
+            font-weight: 850;
+            letter-spacing: -.065em;
+            line-height: 1;
+            text-decoration: none;
+            background: none;
+            -webkit-text-fill-color: initial;
+            color: #f8f5ff;
+            filter: drop-shadow(0 0 16px rgba(168, 85, 247, .14));
+        }
+        .brand-main { color: #f8f5ff; }
+        .brand-accent {
+            color: #c084fc;
+            text-shadow: 0 0 22px rgba(168, 85, 247, .25);
+        }
+        .logo::after {
+            content: "";
+            position: absolute;
+            height: 3px;
+            width: 100%;
+            left: 0;
+            bottom: -9px;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #7c3aed, #d946ef);
+            transform: scaleX(.92);
+            transform-origin: left;
+        }
+        .header-content { overflow: visible; }
+        .logo { position: relative; }
+
+        /* Remove leftover blue/amber accents so the entire page is cohesive. */
+        :root {
+            --accent-rose: #a855f7;
+            --accent-rose-light: #d8b4fe;
+            --accent-blue: #8b5cf6;
+            --accent-amber: #c084fc;
+            --border-subtle: rgba(192, 132, 252, .14);
+            --border-normal: rgba(192, 132, 252, .25);
+        }
+        body {
+            background:
+                radial-gradient(ellipse at 50% -15%, rgba(124, 58, 237, .24), transparent 48%),
+                linear-gradient(180deg, #090611 0%, #110b20 58%, #090611 100%);
+        }
+        .header { background: rgba(9, 6, 17, .94); }
+        .player-wrapper { border-color: rgba(192,132,252,.28); }
+        .plyr { --plyr-color-main: #a855f7; }
+        .plyr__control--overlaid {
+            background: rgba(139, 92, 246, .94);
+            box-shadow: 0 8px 30px rgba(124,58,237,.32);
+        }
+        .info-card, .card {
+            background: linear-gradient(145deg, rgba(32,20,50,.97), rgba(17,11,31,.98));
+            border-color: rgba(192,132,252,.20);
+        }
+        .btn { background: #211431; border-color: rgba(192,132,252,.24); }
+        .btn:hover { background: rgba(124,58,237,.22); border-color: #c084fc; }
+        .card-icon { background: rgba(139,92,246,.16); }
+        .card-link { background: rgba(35,20,54,.82); }
+        .footer { border-top-color: rgba(192,132,252,.20); }
+        .audio-warning {
+            color: #e9d5ff !important;
+            background: linear-gradient(110deg, rgba(91,33,182,.24), rgba(147,51,234,.13)) !important;
+            border: 1px solid rgba(192,132,252,.34) !important;
+            box-shadow: 0 8px 24px rgba(76,29,149,.12);
+        }
+        .audio-warning svg { color: #c084fc !important; stroke: currentColor; }
+        .audio-warning span { color: #e9d5ff !important; }
+        .meta-tag { color: #e9d5ff; background: rgba(124,58,237,.18); }
+        .section-title, .slogan-highlight {
+            background: linear-gradient(110deg, #c084fc, #f0abfc);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+
     </style>
 </head>
 
@@ -1127,7 +1209,7 @@
 
     <header class="header">
         <div class="header-content">
-            <a href="https://t.me/dreamxbotz" class="logo"> DreamXBotz </a>
+            <a href="https://t.me/dreamxbotz" class="logo"><span class="brand-main">DreamX</span><span class="brand-accent">Botz</span></a>
 
             <nav class="nav">
                 <a href="#video-section">Stream</a>
