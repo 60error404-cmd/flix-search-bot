@@ -23,7 +23,23 @@ async def favicon_route_handler(request):
 
 @routes.get("/", allow_head=True)
 async def root_route_handler(request):
-    return web.json_response("dreamxbotz")
+    """Serve the public DreamXBotz homepage and keep the host health check healthy."""
+    try:
+        with open("dreamxbotz/template/home.html", encoding="utf-8") as page:
+            template = jinja2.Template(page.read(), autoescape=True)
+        username = str(getattr(dreamxbotz, "username", "") or "dreamxbotz").lstrip("@")
+        return web.Response(
+            text=template.render(
+                bot_name="DreamXBotz",
+                bot_url=f"https://t.me/{username}",
+                support_url=info.GRP_LNK,
+                updates_url=info.UPDATE_CHNL_LNK,
+            ),
+            content_type="text/html",
+        )
+    except Exception as e:
+        logger.exception("Could not render homepage: %s", e)
+        raise web.HTTPInternalServerError(text="Homepage is temporarily unavailable.")
 
 @routes.get(r"/watch/{path:\S+}", allow_head=True)
 async def watch_handler(request: web.Request):
