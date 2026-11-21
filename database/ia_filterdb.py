@@ -87,7 +87,7 @@ class Media2(Document):
 async def check_db_size(db):
     try:
         now = datetime.utcnow()
-        if _db_stats_cache["timestamp"] and (now - _db_stats_cache["timestamp"] < timedelta(minutes=10)):
+        if _db_stats_cache["timestamp"] and (now - _db_stats_cache["timestamp"] < timedelta(seconds=30)):
             return _db_stats_cache["primary_size"]
         stats = await db.command("dbstats")
         db_logical_size = stats["dataSize"]
@@ -488,3 +488,21 @@ async def dreamxbotz_get_series(limit: int = 30) -> Dict[str, List[int]]:
     except Exception as e:
         logger.error(f"Error in dreamxbotz_get_series: {e}")
         return []
+
+
+async def delete_turso_file(file_id: str) -> int:
+    if not TURSO_ENABLED:
+        return 0
+    return await turso_db.delete_file(file_id)
+
+
+async def delete_all_turso_files() -> int:
+    if not TURSO_ENABLED:
+        return 0
+    return await turso_db.delete_all()
+
+
+async def delete_turso_matching(file_name: str, file_size: int, mime_type: str) -> int:
+    if not TURSO_ENABLED:
+        return 0
+    return await turso_db.delete_matching(file_name, file_size, mime_type)
