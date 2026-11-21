@@ -2,7 +2,7 @@ import re
 import logging
 from pyrogram import Client, filters
 from info import DELETE_CHANNELS, MULTIPLE_DB
-from database.ia_filterdb import Media, Media2, unpack_new_file_id
+from database.ia_filterdb import Media, Media2, unpack_new_file_id, delete_turso_file, delete_turso_matching
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,8 @@ async def deletemultiplemedia(client, message):
     result = await Media.collection.delete_one({'_id': file_id})
     if not result.deleted_count and MULTIPLE_DB:
         result = await Media2.collection.delete_one({'_id': file_id})
+    if not result.deleted_count:
+        result.deleted_count = await delete_turso_file(file_id)
     if result.deleted_count:
         logger.info('File is successfully deleted from database.')
     else:
@@ -60,4 +62,8 @@ async def deletemultiplemedia(client, message):
                     if result.deleted_count:
                         logger.info('File is successfully deleted from database.')
                     else:
-                        logger.info('File not found in database.')
+                        turso_deleted = await delete_turso_matching(file_name, media.file_size, media.mime_type)
+                        if turso_deleted:
+                            logger.info('File is successfully deleted from Turso database.')
+                        else:
+                            logger.info('File not found in database.')
