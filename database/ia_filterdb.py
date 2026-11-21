@@ -16,9 +16,14 @@ from info import (
 from datetime import datetime, timedelta
 import asyncio
 from functools import lru_cache
+from types import SimpleNamespace
+from info import TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, MONGO_MAX_SIZE_MB
+from database import turso_db
 
 
 logger = logging.getLogger(__name__)
+TURSO_ENABLED = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+_save_lock = asyncio.Lock()
 # ---------------------------------------------------------
 
 # Global cache for DB size
@@ -95,77 +100,67 @@ async def check_db_size(db):
         return db_size_mb
     except Exception:
         logger.exception("Error checking database size")
-        return 0
+        return None
 
 
 async def save_file(media):
-    """Save file in database, with detailed logging."""
+    """Save media metadata to MongoDB first, then Turso after the configured limit."""
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_unique_id = getattr(media, "file_unique_id", None)
-    file_name = re.sub(
-        r"[_\-\.#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]", " ", str(media.file_name)
-    )
+    file_name = re.sub(r"[_\-\.#+$%^&*()!~,;:\"'?/<>[\]{}=|\\]", " ", str(media.file_name))
     file_name = re.sub(r"\s+", " ", file_name).strip()
-    saveMedia = Media
-    target_db = "Primary"
+    cover_media = getattr(media, "video_cover", None) or getattr(media, "cover", None)
+    record_data = {
+        "file_id": file_id, "file_unique_id": file_unique_id, "file_ref": file_ref,
+        "file_name": file_name, "file_size": media.file_size, "file_type": media.file_type,
+        "mime_type": media.mime_type,
+        "caption": (media.caption.html if media.caption and INDEX_CAPTION else None),
+        "cover": getattr(cover_media, "file_id", None) if COVERX else None,
+    }
     duplicate_filter = {"$or": [{"file_id": file_id}]}
     if file_unique_id:
         duplicate_filter["$or"].append({"file_unique_id": file_unique_id})
-    try:
-        exists = await Media.find_one(duplicate_filter)
-        if exists:
-            logger.info(f"[SKIP] '{file_name}' already in Primary DB.")
-            return False, 0
-        if MULTIPLE_DB:
-            exists = await Media2.find_one(duplicate_filter)
-            if exists:
-                logger.info(f"[SKIP] '{file_name}' already in Secondary DB.")
-                return False, 0
-    except Exception as e:
-        logger.error("Error during duplicate check; continuing with save.", exc_info=e)
-
-    if MULTIPLE_DB:
+    async with _save_lock:
         try:
-            primary_db_size = await check_db_size(db)
-            if primary_db_size >= 407:
-                saveMedia = Media2
-                target_db = "Secondary"
-                logger.warning("Switching to Secondary DB due to size threshold.")
-        except Exception as e:
-            logger.error(
-                "Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e
-            )
-    try:
-        cover_media = getattr(media, "video_cover", None) or getattr(media, "cover", None)
-        cover_to_use = getattr(cover_media, "file_id", None)
-        record = saveMedia(
-            file_id=file_id,
-            file_unique_id=file_unique_id,
-            file_ref=file_ref,
-            file_name=file_name,
-            file_size=media.file_size,
-            file_type=media.file_type,
-            mime_type=media.mime_type,
-            caption=(media.caption.html if media.caption and INDEX_CAPTION else None),
-            cover=cover_to_use if COVERX else None,
-        )
-    except Exception as e:
-        logger.exception(f"[ERROR] '{file_name}' → {e}")
-        return False, 2
-    try:
-        await record.commit()
-    except DuplicateKeyError:
-        logger.info(
-            f"[SKIP] DuplicateKey: '{file_name}' already exists in {target_db} DB."
-        )
-        return False, 0
-    except Exception as e:
-        logger.exception(
-            f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e
-        )
-        return False, 3
-    #logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
-    return True, 1
+            if await Media.find_one(duplicate_filter):
+                return False, 0
+            if MULTIPLE_DB and await Media2.find_one(duplicate_filter):
+                return False, 0
+            if TURSO_ENABLED and await turso_db.is_duplicate(file_id, file_unique_id):
+                return False, 0
+        except Exception:
+            logger.exception("Media duplicate check failed; refusing save.")
+            return False, 3
+        target_db = "Primary MongoDB"
+        if TURSO_ENABLED:
+            primary_size = await check_db_size(db)
+            if primary_size is None:
+                logger.error("MongoDB size check failed; refusing unsafe fallback decision.")
+                return False, 3
+            if primary_size >= MONGO_MAX_SIZE_MB:
+                try:
+                    await turso_db.insert_media(record_data)
+                    logger.info("Saved '%s' to Turso overflow database.", file_name)
+                    return True, 1
+                except Exception:
+                    logger.exception("Turso overflow insert failed for '%s'.", file_name)
+                    return False, 3
+        elif MULTIPLE_DB:
+            primary_size = await check_db_size(db)
+            if primary_size is None:
+                return False, 3
+            if primary_size >= 407:
+                target_db = "Secondary MongoDB"
+        saveMedia = Media2 if target_db == "Secondary MongoDB" else Media
+        try:
+            record = saveMedia(**record_data)
+            await record.commit()
+            return True, 1
+        except DuplicateKeyError:
+            return False, 0
+        except Exception:
+            logger.exception("Failed saving '%s' to %s.", file_name, target_db)
+            return False, 3
 
 async def get_search_results(chat_id, query, file_type=None, max_results=None, offset=0, filter=False):
     if max_results is None:
