@@ -202,6 +202,33 @@ async def get_search_results(chat_id, query, file_type=None, max_results=None, o
     if file_type:
         filter_mongo["file_type"] = file_type
 
+    if TURSO_ENABLED:
+        try:
+            mongo_tasks = [
+                Media.find(filter_mongo).sort("$natural", -1).limit(10000).to_list(length=10000)
+            ]
+            if MULTIPLE_DB:
+                mongo_tasks.append(Media2.find(filter_mongo).sort("$natural", -1).limit(10000).to_list(length=10000))
+            mongo_results = await asyncio.gather(*mongo_tasks)
+            mongo_files = []
+            for batch in mongo_results:
+                mongo_files.extend(batch)
+            search_terms = query if isinstance(query, list) else [query]
+            turso_rows = await turso_db.search_media(
+                regex, search_terms, file_type=file_type, limit=10000
+            )
+            turso_files = [SimpleNamespace(**row) for row in turso_rows]
+            combined = turso_files + mongo_files
+            total_results = len(combined)
+            files = combined[offset:offset + max_results]
+            next_offset = offset + len(files)
+            if next_offset >= total_results:
+                next_offset = ""
+            return files, next_offset, total_results
+        except Exception:
+            logger.exception("Combined MongoDB/Turso search failed.")
+            return [], None, 0
+
     if ULTRA_FAST_MODE:
         limit = max_results + 1
         if MULTIPLE_DB:
@@ -284,6 +311,13 @@ async def get_bad_files(query, file_type=None):
         files = results[1] + results[0]
     else:
         files = results[0]
+    if TURSO_ENABLED:
+        try:
+            terms = [query]
+            turso_rows = await turso_db.search_media(regex, terms, file_type=file_type, limit=300)
+            files.extend(SimpleNamespace(**row) for row in turso_rows)
+        except Exception:
+            logger.exception("Turso bad-file search failed.")
     files = files[:300]
     return files, len(files)
 
@@ -299,6 +333,16 @@ async def get_file_details(query):
     if MULTIPLE_DB:
         tasks.append(Media2.find(filter).to_list(length=1))  
     results = await asyncio.gather(*tasks)
+    if TURSO_ENABLED:
+        try:
+            turso_rows = await turso_db.fetch_all(
+                "SELECT file_id, file_unique_id, file_ref, file_name, file_size, file_type, mime_type, caption, cover FROM media WHERE file_id = ? LIMIT 1",
+                (query,),
+            )
+            if turso_rows:
+                return [SimpleNamespace(**turso_rows[0])]
+        except Exception:
+            logger.exception("Turso file-detail lookup failed.")
     for filedetails in results:
         if filedetails:
             _FILE_DETAILS_CACHE[query] = filedetails
@@ -342,17 +386,17 @@ def unpack_new_file_id(new_file_id):
 
 async def dreamxbotz_fetch_media(limit: int) -> List[dict]:
     try:
+        primary = await Media.find().sort("$natural", -1).limit(limit).to_list(length=limit)
+        secondary = []
         if MULTIPLE_DB:
-            db_size = await check_db_size(db)
-            if db_size > 407:
-                cursor = Media2.find().sort("$natural", -1).limit(limit)
-                files = await cursor.to_list(length=limit)
-                return files
-        cursor = Media.find().sort("$natural", -1).limit(limit)
-        files = await cursor.to_list(length=limit)
-        return files
+            secondary = await Media2.find().sort("$natural", -1).limit(limit).to_list(length=limit)
+        overflow = []
+        if TURSO_ENABLED:
+            rows = await turso_db.fetch_latest(limit)
+            overflow = [SimpleNamespace(**row) for row in rows]
+        return (overflow + secondary + primary)[:limit]
     except Exception as e:
-        logger.error(f"Error in dreamxbotz_fetch_media: {e}")
+        logger.error("Error in dreamxbotz_fetch_media: %s", e)
         return []
 
 
