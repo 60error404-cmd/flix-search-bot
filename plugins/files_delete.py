@@ -24,9 +24,10 @@ async def deletemultiplemedia(client, message):
     result = await Media.collection.delete_one({'_id': file_id})
     if not result.deleted_count and MULTIPLE_DB:
         result = await Media2.collection.delete_one({'_id': file_id})
-    if not result.deleted_count:
-        result.deleted_count = await delete_turso_file(file_id)
-    if result.deleted_count:
+    deleted_count = result.deleted_count
+    if not deleted_count:
+        deleted_count = await delete_turso_file(file_id)
+    if deleted_count:
         logger.info('File is successfully deleted from database.')
     else:
         file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
