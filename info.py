@@ -97,6 +97,14 @@ DATABASE_URI2 = environ.get('DATABASE_URI2', '')
 if not MULTIPLE_DB:
     DATABASE_URI2 = DATABASE_URI
 
+# Optional Turso overflow store. MongoDB remains the primary media index.
+TURSO_DATABASE_URL = environ.get("TURSO_DATABASE_URL", "").strip()
+TURSO_AUTH_TOKEN = environ.get("TURSO_AUTH_TOKEN", "").strip()
+try:
+    MONGO_MAX_SIZE_MB = max(1.0, float(environ.get("MONGO_MAX_SIZE_MB", "512")))
+except (TypeError, ValueError):
+    MONGO_MAX_SIZE_MB = 512.0
+
 
 # ==============================================================================
 # 4. BOT MEDIA & UI ASSETS
