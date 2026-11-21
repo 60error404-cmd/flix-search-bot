@@ -4,7 +4,7 @@ from rapidfuzz import process
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 
-from database.ia_filterdb import Media, Media2, get_search_results, get_bad_files
+from database.ia_filterdb import Media, Media2, get_search_results, get_bad_files, delete_turso_file, delete_all_turso_files
 from database.config_db import mdb
 from pyrogram.errors import MessageIdInvalid, UserIsBlocked, MessageNotModified, PeerIdInvalid, MessageDeleteForbidden
 from pyrogram import Client, filters, enums
@@ -887,6 +887,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await Media.collection.drop()
         if MULTIPLE_DB:    
             await Media2.collection.drop()
+        await delete_all_turso_files()
         await query.answer("Eᴠᴇʀʏᴛʜɪɴɢ's Gᴏɴᴇ")
         await query.message.edit('ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ✅')
 
@@ -949,6 +950,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         result = await Media2.collection.delete_one({
                             '_id': file_ids,
                         })
+                    if not result.deleted_count:
+                        result.deleted_count = await delete_turso_file(file_ids)
                     if result.deleted_count:
                         logger.info(
                             f'ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
